@@ -42,9 +42,23 @@ export interface DayGroup {
   total: number
 }
 
+export function getNextDueDate(bank: Bank, today: Date = new Date()): Date {
+  const day = BANK_DUE_DAY[bank]
+  const next = new Date(today.getFullYear(), today.getMonth(), day)
+  if (today.getDate() > day) {
+    next.setMonth(next.getMonth() + 1)
+  }
+  return next
+}
+
+export function isDueNextMonth(bank: Bank, today: Date = new Date()): boolean {
+  return today.getDate() > BANK_DUE_DAY[bank]
+}
+
 export function calcMonthProjection(
   debts: Debt[],
-  monthOffset: number
+  monthOffset: number,
+  today: Date = new Date()
 ): {
   total: number
   groups: DayGroup[]
@@ -55,8 +69,13 @@ export function calcMonthProjection(
     (d) => d.currentInstallment + monthOffset <= d.totalInstallments
   )
 
+  const filtered =
+    monthOffset === 0
+      ? eligibleDebts.filter((d) => today.getDate() <= BANK_DUE_DAY[d.bank])
+      : eligibleDebts
+
   const byDay = new Map<number, Debt[]>()
-  for (const debt of eligibleDebts) {
+  for (const debt of filtered) {
     const day = BANK_DUE_DAY[debt.bank]
     const arr = byDay.get(day) ?? []
     arr.push(debt)
