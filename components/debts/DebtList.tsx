@@ -6,13 +6,14 @@ import { useSearch } from '@/hooks/useSearch'
 import { DebtCard } from './DebtCard'
 import { DebtEditModal } from './DebtEditModal'
 import { getNextDueDate, isDueNextMonth } from '@/lib/calculations'
+import { formatCurrency } from '@/lib/formatters'
 import type { Debt } from '@/types'
 
 export function DebtList() {
   const { filtered } = useSearch()
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null)
 
-  const { thisMonth, nextMonth } = useMemo(() => {
+  const { thisMonth, nextMonth, thisMonthTotal, nextMonthTotal } = useMemo(() => {
     const today = new Date()
     const active = filtered.filter((d) => d.isActive)
     const sorted = [...active].sort(
@@ -20,7 +21,9 @@ export function DebtList() {
     )
     const thisMonth = sorted.filter((d) => !isDueNextMonth(d.bank, today))
     const nextMonth = sorted.filter((d) => isDueNextMonth(d.bank, today))
-    return { thisMonth, nextMonth }
+    const thisMonthTotal = thisMonth.reduce((s, d) => s + d.monthlyAmount, 0)
+    const nextMonthTotal = nextMonth.reduce((s, d) => s + d.monthlyAmount, 0)
+    return { thisMonth, nextMonth, thisMonthTotal, nextMonthTotal }
   }, [filtered])
 
   if (thisMonth.length === 0 && nextMonth.length === 0) {
@@ -50,6 +53,7 @@ export function DebtList() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            <TotalRow label="Total pendente este mês" value={thisMonthTotal} />
           </>
         )}
 
@@ -70,6 +74,7 @@ export function DebtList() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            <TotalRow label="Total do próximo mês" value={nextMonthTotal} muted />
           </>
         )}
       </div>
@@ -88,5 +93,22 @@ function SectionLabel({ children, className = '' }: { children: React.ReactNode;
     <p className={`text-[11px] font-bold text-muted uppercase tracking-wide pl-1 ${className}`}>
       {children}
     </p>
+  )
+}
+
+function TotalRow({ label, value, muted = false }: { label: string; value: number; muted?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-between rounded-card px-4 py-3 mt-1 ${
+        muted ? 'bg-bg border border-border' : 'bg-accent text-white'
+      }`}
+    >
+      <span className={`text-xs font-bold uppercase tracking-wide ${muted ? 'text-muted' : 'text-white/80'}`}>
+        {label}
+      </span>
+      <span className={`text-base font-black ${muted ? 'text-text' : 'text-white'}`}>
+        {formatCurrency(value)}
+      </span>
+    </div>
   )
 }

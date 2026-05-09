@@ -6,25 +6,40 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 
+function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+}
+
 export default function LoginPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     async function checkRedirect() {
-      const { getRedirectResult } = await import('firebase/auth')
-      const { auth } = await import('@/lib/firebase')
       try {
+        const { getRedirectResult, setPersistence, browserLocalPersistence } = await import(
+          'firebase/auth'
+        )
+        const { auth } = await import('@/lib/firebase')
+        await setPersistence(auth, browserLocalPersistence)
         const result = await getRedirectResult(auth)
+        if (cancelled) return
         if (result?.user) {
           router.replace('/')
+          return
         }
       } catch (err) {
-        console.error(err)
+        console.error('[login] getRedirectResult', err)
       }
+      if (!cancelled) setLoading(false)
     }
     checkRedirect()
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   async function signInWithGoogle() {
@@ -44,12 +59,22 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider()
       provider.setCustomParameters({ prompt: 'select_account' })
 
+      if (isMobile()) {
+        await signInWithRedirect(auth, provider)
+        return
+      }
+
       try {
         await signInWithPopup(auth, provider)
         router.replace('/')
       } catch (popupErr) {
         const code = (popupErr as { code?: string }).code
-        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+        if (
+          code === 'auth/popup-blocked' ||
+          code === 'auth/popup-closed-by-user' ||
+          code === 'auth/operation-not-supported-in-this-environment' ||
+          code === 'auth/cancelled-popup-request'
+        ) {
           await signInWithRedirect(auth, provider)
         } else {
           throw popupErr
@@ -58,7 +83,6 @@ export default function LoginPage() {
     } catch (err) {
       setError('Não foi possível entrar com o Google. Tente novamente.')
       console.error(err)
-    } finally {
       setLoading(false)
     }
   }
