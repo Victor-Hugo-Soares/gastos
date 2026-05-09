@@ -3,25 +3,29 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-nunito: 'Nunito', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #f5f5f0;
+  color: #1a1a2e;
+  font-family: var(--font-nunito), 'Nunito', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 @layer utilities {
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
   .text-balance {
     text-wrap: balance;
   }
 }
+
