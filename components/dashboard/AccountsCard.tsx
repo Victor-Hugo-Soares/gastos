@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { formatCurrency } from '@/lib/formatters'
 import { setAccountBalance } from '@/hooks/useAccounts'
 import { DepositModal } from './DepositModal'
+import { PayModal } from './PayModal'
 import { cn } from '@/lib/cn'
 import type { AccountBank } from '@/types'
 
@@ -22,6 +23,7 @@ export function AccountsCard() {
   const [editing, setEditing] = useState<AccountBank | null>(null)
   const [draft, setDraft] = useState('')
   const [depositFor, setDepositFor] = useState<AccountBank | null>(null)
+  const [payFor, setPayFor] = useState<AccountBank | null>(null)
 
   const total = accounts.reduce((s, a) => s + a.balance, 0)
 
@@ -62,7 +64,11 @@ export function AccountsCard() {
             const isEditing = editing === bank
 
             return (
-              <div key={bank} className={cn('rounded-chip px-3 py-2', meta.bg)}>
+              <div
+                key={bank}
+                className={cn('rounded-chip px-3 py-2 cursor-pointer', meta.bg)}
+                onClick={() => { if (!isEditing) setPayFor(bank) }}
+              >
                 <div className="flex items-center justify-between mb-1">
                   <p className={cn('text-[10px] font-bold uppercase tracking-wide', meta.text)}>
                     {meta.label}
@@ -71,7 +77,7 @@ export function AccountsCard() {
                     <div className="flex gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setDepositFor(bank)}
+                        onClick={(e) => { e.stopPropagation(); setDepositFor(bank) }}
                         className={cn('p-0.5', meta.text)}
                         aria-label={`Recarregar ${meta.label}`}
                       >
@@ -79,7 +85,7 @@ export function AccountsCard() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => startEdit(bank, balance)}
+                        onClick={(e) => { e.stopPropagation(); startEdit(bank, balance) }}
                         className={cn('p-0.5', meta.text)}
                         aria-label={`Editar saldo ${meta.label}`}
                       >
@@ -148,6 +154,12 @@ export function AccountsCard() {
             initialAccount={depositFor}
             onClose={() => setDepositFor(null)}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {payFor && (
+          <PayModal bank={payFor} onClose={() => setPayFor(null)} />
         )}
       </AnimatePresence>
     </>
