@@ -4,27 +4,36 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/Button'
-
-function isMobile(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-}
 
 export default function LoginPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [signingIn, setSigningIn] = useState(false)
+  const [checkingRedirect, setCheckingRedirect] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    async function checkRedirect() {
+    let unsub: (() => void) | undefined
+
+    async function init() {
+      const {
+        getRedirectResult,
+        setPersistence,
+        browserLocalPersistence,
+        onAuthStateChanged,
+      } = await import('firebase/auth')
+      const { auth } = await import('@/lib/firebase')
+
+      await setPersistence(auth, browserLocalPersistence)
+
+      // If user is already authenticated (e.g. came back from Google redirect),
+      // bounce them straight to the app.
+      unsub = onAuthStateChanged(auth, (user) => {
+        if (cancelled) return
+        if (user) router.replace('/')
+      })
+
       try {
-        const { getRedirectResult, setPersistence, browserLocalPersistence } = await import(
-          'firebase/auth'
-        )
-        const { auth } = await import('@/lib/firebase')
-        await setPersistence(auth, browserLocalPersistence)
         const result = await getRedirectResult(auth)
         if (cancelled) return
         if (result?.user) {
@@ -32,19 +41,25 @@ export default function LoginPage() {
           return
         }
       } catch (err) {
-        console.error('[login] getRedirectResult', err)
+        const e = err as { code?: string; message?: string }
+        console.error('[login] getRedirectResult', e)
+        if (!cancelled) {
+          setError(`Falha no retorno: ${e.code ?? e.message ?? 'desconhecido'}`)
+        }
       }
-      if (!cancelled) setLoading(false)
+      if (!cancelled) setCheckingRedirect(false)
     }
-    checkRedirect()
+
+    init().catch(console.error)
     return () => {
       cancelled = true
+      unsub?.()
     }
   }, [router])
 
   async function signInWithGoogle() {
     setError(null)
-    setLoading(true)
+    setSigningIn(true)
     try {
       const {
         GoogleAuthProvider,
@@ -59,7 +74,16 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider()
       provider.setCustomParameters({ prompt: 'select_account' })
 
-      if (isMobile()) {
+      const ua = navigator.userAgent
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
+      const isStandalone =
+        // iOS PWA flag
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window.navigator as any).standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches
+
+      // PWA standalone on iOS doesn't return from signInWithRedirect — use popup there.
+      if (isMobile && !isStandalone) {
         await signInWithRedirect(auth, provider)
         return
       }
@@ -81,11 +105,14 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      setError('Não foi possível entrar com o Google. Tente novamente.')
-      console.error(err)
-      setLoading(false)
+      const e = err as { code?: string; message?: string }
+      console.error('[login] signIn', e)
+      setError(`Falha no login: ${e.code ?? e.message ?? 'desconhecido'}`)
+      setSigningIn(false)
     }
   }
+
+  const showSpinner = checkingRedirect || signingIn
 
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6">
@@ -99,22 +126,30 @@ export default function LoginPage() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <Button
+          <button
             type="button"
             onClick={signInWithGoogle}
-            loading={loading}
-            className="w-full bg-white text-text border border-border hover:bg-bg"
-            size="lg"
+            disabled={showSpinner}
+            className="w-full h-12 px-6 rounded-btn bg-white text-text border border-border hover:bg-bg active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
-            <span className="flex items-center justify-center gap-3">
-              <GoogleIcon />
-              <span className="font-bold">Continuar com Google</span>
-            </span>
-          </Button>
+            {showSpinner ? (
+              <>
+                <span className="w-4 h-4 border-2 border-text border-t-transparent rounded-full animate-spin" />
+                <span className="font-bold text-sm">
+                  {checkingRedirect ? 'Verificando...' : 'Entrando...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <GoogleIcon />
+                <span className="font-bold text-sm">Continuar com Google</span>
+              </>
+            )}
+          </button>
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-btn p-3">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-xs text-red-600 break-words">{error}</p>
             </div>
           )}
 
